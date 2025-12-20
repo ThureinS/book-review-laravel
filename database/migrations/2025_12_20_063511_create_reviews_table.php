@@ -16,7 +16,7 @@ return new class extends Migration
 
             $table->unsignedBigInteger('book_id');
 
-            $table->string('review');
+            $table->text('review');
             $table->unsignedTinyInteger('rating');
 
             $table->timestamps();
