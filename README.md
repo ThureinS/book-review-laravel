@@ -46,11 +46,19 @@ These use `withCount('reviews')` and `withAvg('reviews', 'rating')` for aggregat
 -   Cache busted automatically via model `booted()` events on Book and Review models
 
 ```php
-// In Book.php and Review.php
+// Book.php
 protected static function booted()
 {
     static::updated(fn(Book $book) => cache()->forget('book:' . $book->id));
     static::deleted(fn(Book $book) => cache()->forget('book:' . $book->id));
+}
+
+// Review.php
+protected static function booted()
+{
+    static::updated(fn(Review $review) => cache()->forget('book:' . $review->book_id));
+    static::deleted(fn(Review $review) => cache()->forget('book:' . $review->book_id));
+    static::created(fn(Review $review) => cache()->forget('book:' . $review->book_id));
 }
 ```
 
@@ -67,10 +75,9 @@ RateLimiter::for('reviews', function (Request $request) {
 Applied via middleware in `routes/web.php`:
 
 ```php
-Route::resource('books.reviews', ReviewController::class)
-    ->scoped(['review' => 'book'])
-    ->only(['create', 'store'])
-    ->middleware(['throttle:reviews']);
+Route::post('books/{book}/reviews', [ReviewController::class, 'store'])
+    ->name('books.reviews.store')
+    ->middleware('throttle:reviews');
 ```
 
 ### Database Seeder
@@ -100,7 +107,7 @@ app/
 │   ├── BookController.php      # index() and show() only
 │   └── ReviewController.php    # create() and store() only
 ├── Models/
-│   ├── Book.php                # 14 query scopes, cache busting
+│   ├── Book.php                # 10 query scopes, cache busting
 │   └── Review.php              # $fillable = ['review', 'rating']
 ├── Providers/
 │   └── AppServiceProvider.php  # Rate limiter definition
@@ -144,81 +151,6 @@ composer setup
 | GET    | `/books/{book}`                | BookController@show     | Single book with reviews      |
 | GET    | `/books/{book}/reviews/create` | ReviewController@create | Review form                   |
 | POST   | `/books/{book}/reviews`        | ReviewController@store  | Submit review (throttled)     |
-
----
-
-## 🔒 Security Considerations
-
-### What's Good ✅
-
-1. **CSRF Protection** - `@csrf` is present in the review form
-2. **Input Validation** - Reviews validated: `'review' => 'string|min:15|required'`, `'rating' => 'integer|min:1|max:5|required'`
-3. **Rate Limiting** - 3 reviews/hour per IP prevents spam
-4. **Cascade Deletes** - Reviews deleted when parent book deleted (foreign key constraint)
-5. **Mass Assignment Protection** - `Review` uses `$fillable`
-
-### Potential Issues ⚠️
-
-1. **No Authentication** - Anyone can submit reviews anonymously
-2. **No `$fillable` on Book Model** - Currently not an issue since there's no book creation route, but add it if you expose one
-3. **Cache Key Collision** - `book:{filter}:{title}` could conflict if titles contain special characters. Consider hashing:
-    ```php
-    $cacheKey = 'books:' . md5($filter . ':' . $title);
-    ```
-4. **No Validation Error Display** - The review form doesn't show `@error` directives. Add:
-    ```blade
-    @error('review')
-        <p class="text-red-500 text-sm">{{ $message }}</p>
-    @enderror
-    ```
-5. **Integer ID Exposure** - Book IDs are sequential integers. Not a security issue but consider UUIDs for production
-
-### Not Issues (Clarifications)
-
--   The `LIKE '%title%'` query in `scopeTitle()` is safe because Laravel's query builder uses prepared statements
-
----
-
-## 💡 Suggestions
-
-### Quick Wins
-
-1. **Add validation error display** in `create.blade.php`
-2. **Add pagination** - Currently loads all books at once
-3. **Add a "back to book" link** on the review form
-4. **Add flash messages** for successful review submission
-
-### If You Continue Building
-
-1. **Add authentication** (Laravel Breeze is easiest)
-2. **Associate reviews with users** - Add `user_id` to reviews table
-3. **Add ability to edit/delete own reviews**
-4. **Add book CRUD** for admins
-5. **Add database indexes** on `reviews.book_id` and `reviews.created_at`
-
----
-
-## ❓ Questions
-
-1. Did the course cover testing? There's a `tests/` folder but I didn't see custom tests
-2. Are you planning to add authentication or keep it anonymous?
-3. The seeder creates books dated up to 2 years ago - is the time-based filtering working correctly for you?
-
----
-
-## Laravel Concepts Demonstrated
-
-| Concept                | Where                                                                     |
-| ---------------------- | ------------------------------------------------------------------------- |
-| Eloquent Relationships | `Book::hasMany(Review)`, `Review::belongsTo(Book)`                        |
-| Query Scopes           | 14 scopes in `Book.php` including `scopePopular()`, `scopeHighestRated()` |
-| Aggregate Queries      | `withCount()`, `withAvg()`                                                |
-| Caching                | `cache()->remember()` with 1 hour TTL                                     |
-| Model Events           | `booted()` for cache invalidation                                         |
-| Rate Limiting          | Custom `reviews` limiter in AppServiceProvider                            |
-| Blade Components       | `<x-star-rating>` anonymous component                                     |
-| Resource Controllers   | RESTful routing with `->only()`                                           |
-| Nested Resources       | `books.reviews` route with scoped binding                                 |
 
 ---
 
