@@ -19,7 +19,7 @@ Run `php artisan serve` and visit `http://localhost:8000`
 
 ## Tech Stack
 
--   **Laravel 12** with PHP 8.2+ (8.2, 8.3, 8.4 all work)
+-   **Laravel 12** with PHP 8.4+
 -   **Tailwind CSS** via CDN (no build required for styling)
 -   **SQLite** by default
 -   **Blade** templates with one custom component (`<x-star-rating>`)
